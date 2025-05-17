@@ -1,0 +1,79 @@
+Pre spustenie experimentov:
+
+Importy: 
+qiskit- generate_preset_pass_manager, QuantumCircuit
+qiskit_ibm_runtime- QiskitRunTimeService, SamplerV2
+functions_oracles
+
+Vyber backendu: 
+backend = service.backend("ibm_brisbane")
+
+Definicia veľkosti obvodu/počet qubitov a vytvorenie obvodu
+qc = QuantumCircuit(nqubits)
+
+Superpozicia vsetkych stavov na zaciatku algoritmu
+qc.h(range(nqubits))
+
+Vyber funkcie orakula
+Difuzor ako:
+diffuser = QuantumCircuit(nqubits, name='Diffuser')
+diffuser.h(range(nqubits))
+diffuser.x(range(nqubits))
+diffuser.append(func.multi_control_z(nqubits).to_gate(), range(nqubits))
+diffuser.x(range(nqubits))
+diffuser.h(range(nqubits))
+qc.append(diffuser.to_gate(), range(nqubits))
+
+Meranie:
+qc.measure_all()
+
+Nastavenie hodnot a zaslanie na cloud:
+target = backend.target
+pm = generate_preset_pass_manager(target=target, optimization_level=3)
+circuit_isa = pm.run(qc)
+
+sampler = Sampler(mode=backend)
+sampler.options.default_shots = 20000
+
+print(qc.cregs)
+job = sampler.run([circuit_isa], shots=20000)
+
+Pre ziskanie vysledkov:
+job_id = id
+job = service.job(job_id)
+result = job.result(job)
+counts = result[0].data.meas.get_counts()
+
+Vykreslenie pomocou ziskanych hodnot:
+plot_result_from_counts(counts, highlight)
+
+Pouzitim:
+import matplotlib.pyplot as plt
+
+def plot_result_from_counts(counts_dict: dict[str, int], highlight: list[int] = []):
+    counts = {int(k, 2): v for k, v in counts_dict.items()}
+
+    n = max(len(k) for k in counts_dict)
+    max_val = 2 ** n
+
+    total = sum(counts.values())
+
+    values = [counts.get(i, 0) / total for i in range(max_val)]
+
+    colors = ['tab:blue' if i in highlight else 'tomato' for i in range(max_val)]
+
+    plt.figure(figsize=(12, 5))
+    plt.bar(range(max_val), values, color=colors, edgecolor='black')
+    plt.xticks(range(max_val))
+    plt.xlabel("Čísla")
+    plt.ylabel("Frekvencia výskytu")
+    plt.title("Výstupy z kvantového obvodu")
+    plt.ylim(0, max(values) * 1.1)
+    plt.legend(handles=[
+        plt.Rectangle((0, 0), 1, 1, color='tab:blue', label='žiadané stavy'),
+        plt.Rectangle((0, 0), 1, 1, color='tomato', label='ostatné stavy'),
+    ])
+    plt.tight_layout()
+    plt.show()
+
+
